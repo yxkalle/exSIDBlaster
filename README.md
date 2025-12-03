@@ -1,5 +1,8 @@
 # exSIDBlaster 
-*Modded to always output to the only existing SID chip on the board.*
+Patched firmware to always use "chip 1", no matter what setting is used in the SID player. We only have one chip, right? ;)
+I got annoyed having to enable "Fake Stereo" among other things. And the support for it seemed a bit flakey. (I couldn't get it to work on all players.)
+
+Also changed the boot jingle to a tune you may know... for the heck of it!
 
 Shield: [![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
 
