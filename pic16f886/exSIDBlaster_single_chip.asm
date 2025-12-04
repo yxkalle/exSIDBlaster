@@ -427,8 +427,6 @@ icld_waitcycle
 ; Currently only handles writes and delay: addresses are written to the SIDs,
 ; unless it starts with 001xxxxx, in which case address<0:4> + data byte are
 ; used to form a 13bit delay value in multiples of 10 SIDCLKs.
-; Since this routine is called before external input can mess with the device,
-; by default it will play the tune on both SIDs simultaneously.
 ;
 ; Note: this works because the PIC can store 14 bits per address location, and
 ; the SID address space fits 5 bits. We can thus pack SID address (5 bits) + SID
@@ -546,1066 +544,1030 @@ st_dloop2	; 10 SIDCLKs (0.01 ms) loop
 	GOTO	$+1
 	GOTO	__INITTUNE	; SC - both numbers 0, we're done.
 
-; Init tune data. Play a custom deep note rendition. Takes most of the memory space.
+; Delay (approx) macro, Time in ms
+Mdelay		MACRO	Time
+	if (Time > .75)
+	error "Time cannot be more than 75ms"
+	endif
+	dw	(Time*.100)|0x2000
+	ENDM
+
+; Clear all SID registers
+Mreset		MACRO
+	local Reg=0
+	while (Reg <= 0x18)
+	dw	Reg << .8
+Reg++
+	endw
+	ENDM
+
+Mreg		MACRO	Reg, Val
+	dw	(Reg << .8) | Val
+	ENDM
+
+; Voice Macros (Voice = 1, 2, or 3)
+Mvoice_Freq MACRO Voice, Val16
+	dw	(((Voice-1)*.7) << .8) | (Val16 & 0xFF)
+	dw	((((Voice-1)*.7)+1) << .8) | (Val16 >> .8)
+	ENDM
+
+Mvoice_PW	MACRO Voice, Val12
+	dw	((((Voice-1)*.7)+2) << .8) | (Val12 & 0xFF)
+	dw	((((Voice-1)*.7)+3) << .8) | ((Val12 >> .8) & 0x0F)
+	ENDM
+
+Mvoice_Ctrl MACRO Voice, Val
+	dw	((((Voice-1)*.7)+4) << .8) | Val
+	ENDM
+
+Mvoice_AD	MACRO Voice, Val
+	dw	((((Voice-1)*.7)+5) << .8) | Val
+	ENDM
+
+Mvoice_SR	MACRO Voice, Val
+	dw	((((Voice-1)*.7)+6) << .8) | Val
+	ENDM
+
+; Filter Macros
+Mcutoff	MACRO	Val16
+	dw	0x1500 | (Val16 & 0x07)
+	dw	0x1600 | (Val16 >> .3)
+	ENDM
+
+Mres		MACRO	Val
+	Mreg	0x17, Val
+	ENDM
+
+; Master Volume
+Mvol		MACRO	Val
+	Mreg	0x18, Val
+	ENDM
+; ---------------------------
+
 __TUNEDATA	ORG	0x0200
-	dw	0x27D0
-	dw	0x27D0
-	dw	0x27D0
-	dw	0x27D0
-	dw	0x27D0
-	dw	0x0440
-	dw	0x0B40
-	dw	0x1280
-	dw	0x17F1
-	dw	0x181F
-	dw	0x27D0
-	dw	0x005A
-	dw	0x0104
-	dw	0x0441
-	dw	0x0220
-	dw	0x0303
-	dw	0x0509
-	dw	0x069A
-	dw	0x0776
-	dw	0x082E
-	dw	0x0B41
-	dw	0x0920
-	dw	0x0A04
-	dw	0x0C09
-	dw	0x0D99
-	dw	0x0E51
-	dw	0x0F07
-	dw	0x1211
-	dw	0x14E0
-	dw	0x16C0
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0705
-	dw	0x083E
-	dw	0x0940
-	dw	0x1200
-	dw	0x16A0
-	dw	0x27D0
-	dw	0x0440
-	dw	0x0260
-	dw	0x0724
-	dw	0x084E
-	dw	0x0B40
-	dw	0x0960
-	dw	0x0E27
-	dw	0x0F01
-	dw	0x1400
-	dw	0x1680
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0980
-	dw	0x1660
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0776
-	dw	0x082E
-	dw	0x09A0
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0705
-	dw	0x083E
-	dw	0x09C0
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0724
-	dw	0x084E
-	dw	0x09E0
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0900
-	dw	0x0A05
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0776
-	dw	0x082E
-	dw	0x0920
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0705
-	dw	0x083E
-	dw	0x0940
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0724
-	dw	0x084E
-	dw	0x0960
-	dw	0x1280
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0980
-	dw	0x0EA2
-	dw	0x0F0E
-	dw	0x1281
-	dw	0x14E0
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0776
-	dw	0x082E
-	dw	0x09A0
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0705
-	dw	0x083E
-	dw	0x09C0
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0724
-	dw	0x084E
-	dw	0x09E0
-	dw	0x1208
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0305
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0900
-	dw	0x0A06
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0304
-	dw	0x0776
-	dw	0x082E
-	dw	0x09E0
-	dw	0x0A05
-	dw	0x1280
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0705
-	dw	0x083E
-	dw	0x09C0
-	dw	0x1281
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0724
-	dw	0x084E
-	dw	0x09A0
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0980
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0776
-	dw	0x082E
-	dw	0x0960
-	dw	0x1208
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0705
-	dw	0x083E
-	dw	0x0940
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0724
-	dw	0x084E
-	dw	0x0920
-	dw	0x1280
-	dw	0x27D0
-	dw	0x0200
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0900
-	dw	0x1211
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0303
-	dw	0x0776
-	dw	0x082E
-	dw	0x09E0
-	dw	0x0A04
-	dw	0x0EED
-	dw	0x0F5C
-	dw	0x1281
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0705
-	dw	0x083E
-	dw	0x09C0
-	dw	0x1280
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0724
-	dw	0x084E
-	dw	0x09A0
-	dw	0x0E27
-	dw	0x0F01
-	dw	0x1281
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0980
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0776
-	dw	0x082E
-	dw	0x0960
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0705
-	dw	0x083E
-	dw	0x0940
-	dw	0x1208
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0724
-	dw	0x084E
-	dw	0x0920
-	dw	0x27D0
-	dw	0x0200
-	dw	0x07ED
-	dw	0x085C
-	dw	0x0900
-	dw	0x27D0
-	dw	0x0776
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0705
-	dw	0x083E
-	dw	0x0920
-	dw	0x27D0
-	dw	0x0240
-	dw	0x1280
-	dw	0x169B
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0B41
-	dw	0x0EA2
-	dw	0x0F0E
-	dw	0x1281
-	dw	0x1691
-	dw	0x27D0
-	dw	0x0280
-	dw	0x0727
-	dw	0x0834
-	dw	0x0940
-	dw	0x1687
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x079D
-	dw	0x0845
-	dw	0x0960
-	dw	0x167D
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0B40
-	dw	0x0980
-	dw	0x1208
-	dw	0x1673
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x07DB
-	dw	0x082B
-	dw	0x09A0
-	dw	0x1669
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x0727
-	dw	0x0834
-	dw	0x09C0
-	dw	0x1280
-	dw	0x165F
-	dw	0x27D0
-	dw	0x0220
-	dw	0x079D
-	dw	0x0845
-	dw	0x09E0
-	dw	0x1281
-	dw	0x1655
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0900
-	dw	0x0A05
-	dw	0x164B
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0920
-	dw	0x1641
-	dw	0x27D0
-	dw	0x0280
-	dw	0x0727
-	dw	0x0834
-	dw	0x0940
-	dw	0x1208
-	dw	0x1637
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x079D
-	dw	0x0845
-	dw	0x0960
-	dw	0x162D
-	dw	0x27D0
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0980
-	dw	0x1280
-	dw	0x1628
-	dw	0x27D0
-	dw	0x0441
-	dw	0x0220
-	dw	0x0303
-	dw	0x07DB
-	dw	0x082B
-	dw	0x09A0
-	dw	0x0E51
-	dw	0x0F07
-	dw	0x1211
-	dw	0x16C0
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0727
-	dw	0x0834
-	dw	0x09C0
-	dw	0x0E76
-	dw	0x0F2E
-	dw	0x1281
-	dw	0x16A0
-	dw	0x27D0
-	dw	0x0260
-	dw	0x079D
-	dw	0x0845
-	dw	0x09E0
-	dw	0x1200
-	dw	0x1680
-	dw	0x27D0
-	dw	0x0440
-	dw	0x0280
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0900
-	dw	0x0A06
-	dw	0x0E27
-	dw	0x0F01
-	dw	0x1400
-	dw	0x1660
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x07DB
-	dw	0x082B
-	dw	0x09E0
-	dw	0x0A05
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0727
-	dw	0x0834
-	dw	0x09C0
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x079D
-	dw	0x0845
-	dw	0x09A0
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0980
-	dw	0x27D0
-	dw	0x0220
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0960
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0727
-	dw	0x0834
-	dw	0x0940
-	dw	0x27D0
-	dw	0x0260
-	dw	0x079D
-	dw	0x0845
-	dw	0x0920
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0900
-	dw	0x1280
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x07DB
-	dw	0x082B
-	dw	0x09E0
-	dw	0x0A04
-	dw	0x0E51
-	dw	0x0F07
-	dw	0x1211
-	dw	0x14E0
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0727
-	dw	0x0834
-	dw	0x09C0
-	dw	0x0E76
-	dw	0x0F2E
-	dw	0x1281
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x079D
-	dw	0x0845
-	dw	0x09A0
-	dw	0x1200
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0305
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0980
-	dw	0x0E27
-	dw	0x0F01
-	dw	0x1400
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0304
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0960
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0727
-	dw	0x0834
-	dw	0x0940
-	dw	0x1280
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x079D
-	dw	0x0845
-	dw	0x0920
-	dw	0x0EA2
-	dw	0x0F0E
-	dw	0x1281
-	dw	0x14E0
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0900
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07DB
-	dw	0x082B
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0727
-	dw	0x0834
-	dw	0x0920
-	dw	0x1208
-	dw	0x27D0
-	dw	0x0220
-	dw	0x079D
-	dw	0x0845
-	dw	0x0940
-	dw	0x27D0
-	dw	0x0200
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0960
-	dw	0x1280
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0303
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0980
-	dw	0x1211
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0727
-	dw	0x0834
-	dw	0x09A0
-	dw	0x0EED
-	dw	0x0F5C
-	dw	0x1281
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x079D
-	dw	0x0845
-	dw	0x09C0
-	dw	0x1200
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07B6
-	dw	0x0857
-	dw	0x09E0
-	dw	0x0E27
-	dw	0x0F01
-	dw	0x1400
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0900
-	dw	0x0A05
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0727
-	dw	0x0834
-	dw	0x0920
-	dw	0x27D0
-	dw	0x0220
-	dw	0x079D
-	dw	0x0845
-	dw	0x0940
-	dw	0x27D0
-	dw	0x0200
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0960
-	dw	0x27D0
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0980
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0727
-	dw	0x0834
-	dw	0x09A0
-	dw	0x27D0
-	dw	0x0240
-	dw	0x079D
-	dw	0x0845
-	dw	0x09C0
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07B6
-	dw	0x0857
-	dw	0x09E0
-	dw	0x1280
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0900
-	dw	0x0A06
-	dw	0x0EA2
-	dw	0x0F0E
-	dw	0x1281
-	dw	0x14E0
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0727
-	dw	0x0834
-	dw	0x09E0
-	dw	0x0A05
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x079D
-	dw	0x0845
-	dw	0x09C0
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x07B6
-	dw	0x0857
-	dw	0x09A0
-	dw	0x1208
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0980
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0727
-	dw	0x0834
-	dw	0x0960
-	dw	0x1280
-	dw	0x27D0
-	dw	0x0240
-	dw	0x079D
-	dw	0x0845
-	dw	0x0940
-	dw	0x1281
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07B6
-	dw	0x0857
-	dw	0x0920
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07DB
-	dw	0x082B
-	dw	0x0900
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0727
-	dw	0x0834
-	dw	0x09E0
-	dw	0x0A04
-	dw	0x1208
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x079D
-	dw	0x0845
-	dw	0x09C0
-	dw	0x27D0
-	dw	0x1200
-	dw	0x27D0
-	dw	0x00E7
-	dw	0x0102
-	dw	0x0441
-	dw	0x0220
-	dw	0x0303
-	dw	0x0776
-	dw	0x082E
-	dw	0x0B41
-	dw	0x0990
-	dw	0x0A07
-	dw	0x0C06
-	dw	0x0D6A
-	dw	0x0E27
-	dw	0x0F01
-	dw	0x1400
-	dw	0x16B0
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07CF
-	dw	0x0822
-	dw	0x0920
-	dw	0x16C0
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0745
-	dw	0x081D
-	dw	0x09B0
-	dw	0x0A06
-	dw	0x16B0
-	dw	0x27D0
-	dw	0x0440
-	dw	0x0280
-	dw	0x073B
-	dw	0x0817
-	dw	0x0B50
-	dw	0x0940
-	dw	0x16A0
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0776
-	dw	0x082E
-	dw	0x09D0
-	dw	0x0A05
-	dw	0x1690
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07CF
-	dw	0x0822
-	dw	0x0960
-	dw	0x1680
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0765
-	dw	0x081D
-	dw	0x09F0
-	dw	0x0A04
-	dw	0x1670
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x077B
-	dw	0x0817
-	dw	0x0980
-	dw	0x1660
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0796
-	dw	0x082E
-	dw	0x0910
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07CF
-	dw	0x0822
-	dw	0x09A0
-	dw	0x0A03
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0725
-	dw	0x081D
-	dw	0x0930
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07FB
-	dw	0x0816
-	dw	0x09C0
-	dw	0x0A02
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0716
-	dw	0x082E
-	dw	0x0950
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x076F
-	dw	0x0822
-	dw	0x09E0
-	dw	0x0A01
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0705
-	dw	0x081D
-	dw	0x0970
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0305
-	dw	0x071B
-	dw	0x0817
-	dw	0x0900
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0304
-	dw	0x0776
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07EF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0785
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0280
-	dw	0x075B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0776
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07AF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0705
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0200
-	dw	0x07DB
-	dw	0x0816
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0303
-	dw	0x0716
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x078F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0725
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0280
-	dw	0x073B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0796
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0240
-	dw	0x070F
-	dw	0x0823
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0765
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0200
-	dw	0x073B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0756
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0220
-	dw	0x078F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07E5
-	dw	0x081C
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07DB
-	dw	0x0816
-	dw	0x27D0
-	dw	0x0280
-	dw	0x0736
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x07AF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0745
-	dw	0x081D
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x075B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x07B6
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0220
-	dw	0x07EF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0745
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0260
-	dw	0x071B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0280
-	dw	0x0736
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x076F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07E5
-	dw	0x081C
-	dw	0x27D0
-	dw	0x07FB
-	dw	0x0816
-	dw	0x27D0
-	dw	0x0441
-	dw	0x0220
-	dw	0x0303
-	dw	0x0756
-	dw	0x082E
-	dw	0x16B0
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07CF
-	dw	0x0822
-	dw	0x16C0
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0765
-	dw	0x081D
-	dw	0x16B0
-	dw	0x27D0
-	dw	0x0440
-	dw	0x0280
-	dw	0x077B
-	dw	0x0817
-	dw	0x16A0
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0796
-	dw	0x082E
-	dw	0x1690
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07CF
-	dw	0x0822
-	dw	0x1680
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0725
-	dw	0x081D
-	dw	0x1670
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x07FB
-	dw	0x0816
-	dw	0x1660
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0716
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0240
-	dw	0x076F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0705
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0280
-	dw	0x071B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0776
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07EF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0785
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0305
-	dw	0x075B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0304
-	dw	0x0776
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x07AF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0705
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07DB
-	dw	0x0816
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0716
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0240
-	dw	0x078F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0220
-	dw	0x0725
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0200
-	dw	0x073B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x0303
-	dw	0x0796
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x070F
-	dw	0x0823
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x0765
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0280
-	dw	0x073B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0260
-	dw	0x0756
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0240
-	dw	0x078F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0220
-	dw	0x07E5
-	dw	0x081C
-	dw	0x27D0
-	dw	0x0200
-	dw	0x07DB
-	dw	0x0816
-	dw	0x27D0
-	dw	0x0736
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0220
-	dw	0x07AF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0240
-	dw	0x0745
-	dw	0x081D
-	dw	0x27D0
-	dw	0x0260
-	dw	0x075B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0280
-	dw	0x07B6
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x07EF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0745
-	dw	0x081D
-	dw	0x27D0
-	dw	0x02E0
-	dw	0x071B
-	dw	0x0817
-	dw	0x27D0
-	dw	0x0200
-	dw	0x0304
-	dw	0x0736
-	dw	0x082E
-	dw	0x27D0
-	dw	0x0220
-	dw	0x076F
-	dw	0x0822
-	dw	0x27D0
-	dw	0x0240
-	dw	0x07E5
-	dw	0x081C
-	dw	0x27D0
-	dw	0x0260
-	dw	0x07FB
-	dw	0x0816
-	dw	0x27D0
-	dw	0x0280
-	dw	0x0756
-	dw	0x082E
-	dw	0x27D0
-	dw	0x02A0
-	dw	0x07CF
-	dw	0x0822
-	dw	0x27D0
-	dw	0x02C0
-	dw	0x0765
-	dw	0x081D
-	dw	0x27D0
-	dw	0x3FFF
+	Mdelay	.50				;
+	Mdelay	.50				; Delay: 100 ms (Wait for power stabilization)
+
+	Mreset					; Clear all SID registers
+
+	Mvoice_Ctrl 1, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Ctrl 2, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mvol 0x1F				; Master Volume 15 | Filter: Low Pass
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 1, 0x045A	; Note: C-2
+	Mvoice_PW 1, 0x320		;
+	Mvoice_Ctrl 1, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_AD 1, 0x09		; Attack 0, Decay 9
+	Mvoice_SR 1, 0x9A		; Sustain 9, Release 10
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mvoice_PW 2, 0x420		;
+	Mvoice_Ctrl 2, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_AD 2, 0x09		; Attack 0, Decay 9
+	Mvoice_SR 2, 0x99		; Sustain 9, Release 9
+	Mvoice_Freq 3, 0x0751	; Note: A-2
+	Mvoice_Ctrl 3, 0x11		; Triangle, Start Note (Gate Open)
+	Mvoice_SR 3, 0xE0		; Sustain 14, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0x40			;
+	Mvoice_Ctrl 3, 0x00		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Ctrl 1, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0x60			;
+	Mvoice_Ctrl 2, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Freq 3, 0x0127
+	Mvoice_SR 3, 0x00		; Sustain 0, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mreg 0x09, 0xA0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0xC0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0xE0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mvoice_PW 2, 0x500		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0x40			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0x60			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mreg 0x09, 0x80			;
+	Mvoice_Freq 3, 0x0EA2	; Note: A-3
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mvoice_SR 3, 0xE0		; Sustain 14, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mreg 0x09, 0xA0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0xC0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0xE0			;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x500		;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mvoice_PW 2, 0x600		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x4E0		;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mvoice_PW 2, 0x5E0		;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0xC0			;
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0xA0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mreg 0x09, 0x60			;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0x40			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0x20			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mreg 0x09, 0x00			;
+	Mvoice_Ctrl 3, 0x11		; Triangle, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x3E0		;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mvoice_PW 2, 0x4E0		;
+	Mvoice_Freq 3, 0x5CED	; Note: F-6
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0xC0			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0xA0			;
+	Mvoice_Freq 3, 0x0127	; Note: C#0
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0x40			;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x4E24	; Note: D-6
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x5CED	; Note: F-6
+	Mreg 0x09, 0x00			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x3E05	; Note: A#5
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mvoice_Ctrl 2, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_Freq 3, 0x0EA2	; Note: A-3
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x40			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x80			;
+	Mvoice_Ctrl 2, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0xA0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0xC0			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xE0			;
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mvoice_PW 2, 0x500		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x40			;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x80			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x320		;
+	Mvoice_Ctrl 1, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0xA0			;
+	Mvoice_Freq 3, 0x0751	; Note: A-2
+	Mvoice_Ctrl 3, 0x11		; Triangle, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0xC0			;
+	Mvoice_Freq 3, 0x2E76	; Note: F-5
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xE0			;
+	Mvoice_Ctrl 3, 0x00		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Ctrl 1, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mvoice_PW 2, 0x600		;
+	Mvoice_Freq 3, 0x0127
+	Mvoice_SR 3, 0x00		; Sustain 0, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mvoice_PW 2, 0x5E0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0xC0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xA0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x40			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x00			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mvoice_PW 2, 0x4E0		;
+	Mvoice_Freq 3, 0x0751	; Note: A-2
+	Mvoice_Ctrl 3, 0x11		; Triangle, Start Note (Gate Open)
+	Mvoice_SR 3, 0xE0		; Sustain 14, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0xC0			;
+	Mvoice_Freq 3, 0x2E76	; Note: F-5
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xA0			;
+	Mvoice_Ctrl 3, 0x00		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x500		;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x80			;
+	Mvoice_Freq 3, 0x0127
+	Mvoice_SR 3, 0x00		; Sustain 0, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x4E0		;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x40			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x20			;
+	Mvoice_Freq 3, 0x0EA2	; Note: A-3
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mvoice_SR 3, 0xE0		; Sustain 14, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x00			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x20			;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x40			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x60			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x3E0		;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x80			;
+	Mvoice_Ctrl 3, 0x11		; Triangle, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0xA0			;
+	Mvoice_Freq 3, 0x5CED	; Note: F-6
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xC0			;
+	Mvoice_Ctrl 3, 0x00		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0xE0			;
+	Mvoice_Freq 3, 0x0127
+	Mvoice_SR 3, 0x00		; Sustain 0, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mvoice_PW 2, 0x500		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x40			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0xA0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xC0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0xE0			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mvoice_PW 2, 0x600		;
+	Mvoice_Freq 3, 0x0EA2	; Note: A-3
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mvoice_SR 3, 0xE0		; Sustain 14, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mvoice_PW 2, 0x5E0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xC0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0xA0			;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mreg 0x09, 0x60			;
+	Mvoice_Ctrl 3, 0x80		; Noise, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0x40			;
+	Mvoice_Ctrl 3, 0x81		; Noise, Start Note (Gate Open)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x57B6	; Note: E-6
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x2BDB	; Note: E-5
+	Mreg 0x09, 0x00			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x3427	; Note: G-5
+	Mvoice_PW 2, 0x4E0		;
+	Mvoice_Ctrl 3, 0x08		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x459D	; Note: C-6
+	Mreg 0x09, 0xC0			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Ctrl 3, 0x00		; Silent, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 1, 0x02E7	; Note: F-1
+	Mvoice_PW 1, 0x320		;
+	Mvoice_Ctrl 1, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mvoice_PW 2, 0x790		;
+	Mvoice_Ctrl 2, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_AD 2, 0x06		; Attack 0, Decay 6
+	Mvoice_SR 2, 0x6A		; Sustain 6, Release 10
+	Mvoice_Freq 3, 0x0127
+	Mvoice_SR 3, 0x00		; Sustain 0, Release 0
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x22CF	; Note: C-5
+	Mreg 0x09, 0x20			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x1D45	; Note: A-4
+	Mvoice_PW 2, 0x6B0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Ctrl 1, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Freq 2, 0x173B	; Note: F-4
+	Mreg 0x09, 0x40			;
+	Mvoice_Ctrl 2, 0x50		; Triangle + Pulse, Stop Note (Gate Closed)
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mvoice_PW 2, 0x5D0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x22CF	; Note: C-5
+	Mreg 0x09, 0x60			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x1D65	; Note: A-4
+	Mvoice_PW 2, 0x4F0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x177B	; Note: F-4
+	Mreg 0x09, 0x80			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x2E96	; Note: F-5
+	Mreg 0x09, 0x10			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x22CF	; Note: C-5
+	Mvoice_PW 2, 0x3A0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x1D25	; Note: A-4
+	Mreg 0x09, 0x30			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x16FB	; Note: F-4
+	Mvoice_PW 2, 0x2C0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2E16	; Note: F-5
+	Mreg 0x09, 0x50			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x226F	; Note: C-5
+	Mvoice_PW 2, 0x1E0		;
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x1D05	; Note: A-4
+	Mreg 0x09, 0x70			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x500		;
+	Mvoice_Freq 2, 0x171B	; Note: F-4
+	Mreg 0x09, 0x00			;
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x4E0		;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x22EF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x1D85	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x175B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x22AF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x1D05	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x16DB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x3E0		;
+	Mvoice_Freq 2, 0x2E16	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x228F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x1D25	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x173B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2E96	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x230F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x1D65	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x173B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 2, 0x2E56	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x228F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x1CE5	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x16DB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x2E36	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x22AF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x1D45	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x175B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x2EB6	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x22EF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x1D45	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x171B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x2E36	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x226F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x1CE5	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 2, 0x16FB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x320		;
+	Mvoice_Ctrl 1, 0x41		; Pulse, Start Note (Gate Open)
+	Mvoice_Freq 2, 0x2E56	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x22CF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x1D65	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Ctrl 1, 0x40		; Pulse, Stop Note (Gate Closed)
+	Mvoice_Freq 2, 0x177B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2E96	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x22CF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x1D25	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x16FB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x2E16	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x226F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x1D05	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x171B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x22EF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x1D85	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x500		;
+	Mvoice_Freq 2, 0x175B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x4E0		;
+	Mvoice_Freq 2, 0x2E76	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x22AF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x1D05	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x16DB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2E16	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x228F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x1D25	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x173B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x3E0		;
+	Mvoice_Freq 2, 0x2E96	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x230F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x1D65	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x173B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x2E56	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x228F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x1CE5	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x00			;
+	Mvoice_Freq 2, 0x16DB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_Freq 2, 0x2E36	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x22AF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x1D45	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x175B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x2EB6	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x22EF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x1D45	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xE0			;
+	Mvoice_Freq 2, 0x171B	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mvoice_PW 1, 0x400		;
+	Mvoice_Freq 2, 0x2E36	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x20			;
+	Mvoice_Freq 2, 0x226F	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x40			;
+	Mvoice_Freq 2, 0x1CE5	; Note: A-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x60			;
+	Mvoice_Freq 2, 0x16FB	; Note: F-4
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0x80			;
+	Mvoice_Freq 2, 0x2E56	; Note: F-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xA0			;
+	Mvoice_Freq 2, 0x22CF	; Note: C-5
+	Mdelay .20				; Delay: 20 ms
+
+	Mreg 0x02, 0xC0			;
+	Mvoice_Freq 2, 0x1D65	; Note: A-4
+	Mdelay .50				;
+	Mdelay .50				; Delay: 100 ms
+	
+	Mreset					; Clear all SID registers
+
+	dw	0x3FFF				; END
 
 BTABLE	ORG	JMPTBA-3
 	MOVF	TEMPBUF,W
