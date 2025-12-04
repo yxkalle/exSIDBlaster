@@ -1,6 +1,7 @@
 # exSIDBlaster 
 __Original exSID Project:__ http://hacks.slashdirt.org/hw/exsid/
-Copyright ©️ ___Thibaut Varène__
+
+Copyright © __Thibaut Varène__
 
 Patched firmware to always use "chip 1", no matter what setting is used in the SID player. We only have one chip, right? ;)
 I got annoyed having to enable "Fake Stereo" among other things. And the support for it seemed a bit flakey. (I couldn't get it to work on all players.)
