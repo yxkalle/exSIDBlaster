@@ -49,10 +49,10 @@
 	__CONFIG _CONFIG1, _FOSC_EC & _WDTE_OFF & _PWRTE_ON & _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_ON & _IESO_OFF & _FCMEN_OFF & _LVP_OFF
 	__CONFIG _CONFIG2, _BOR4V_BOR40V & _WRT_OFF
 
-#define	SIDCTL		PORTC		; SID bus control port (except reset)
-#define	SIDADR		PORTA		; SID bus address port
-#define	SIDDAT		PORTB		; SID bus data port
-#define	SIDDDR		TRISB		; SID bus data direction
+#define	SIDCTL		PORTC	; SID bus control port (except reset)
+#define	SIDADR		PORTA	; SID bus address port
+#define	SIDDAT		PORTB	; SID bus data port
+#define	SIDDDR		TRISB	; SID bus data direction
 
 #define	EXTCLK		RA7
 
@@ -74,12 +74,10 @@
 
 ; Cross-bank data registers
 	CBLOCK	0x70
-TEMPBUF					; typically holds current address
-WAITCNT:2				; SID clock loop counter
-CSENCTL					; CS Enable bits
-CSDICTL					; CS Disable bits
-LPMBYTE					; Pgm memory LSB
-HPMBYTE					; Pgm memory MSB
+TEMPBUF						; typically holds current address
+WAITCNT:2					; SID clock loop counter
+LPMBYTE						; Pgm memory LSB
+HPMBYTE						; Pgm memory MSB
 	ENDC
 
 ; Program
@@ -107,11 +105,6 @@ __INIT
 	CLRF	SIDDAT			; Clear SID data
 	MOVLW	CSBITM			; disable SID as initial condition
 	MOVWF	SIDCTL			; Clear SID control except CS (preset high). This enables SID /reset
-
-	MOVLW	~CSBITM
-	MOVWF	CSENCTL			; CS enable bits
-	MOVLW	CSBITM
-	MOVWF	CSDICTL			; CS disable bits
 
 	MOVLW	high JMPTBA
 	MOVWF	PCLATH			; Preset PCLATH for jump table == MSB of JMPTBA
@@ -146,7 +139,7 @@ __INIT
 	MOVLW   B'01001000'		; BAUDCTL: Use 16bit BRG
 	MOVWF   BAUDCTL
 	BANKSEL SPBRG
-	MOVLW   .2			; 2Mbps 0% error @24MHz on 16F88X
+	MOVLW   .2				; 2Mbps 0% error @24MHz on 16F88X
 	MOVWF	SPBRG
 	MOVLW	B'00100100'
 	MOVWF	TXSTA			; TXSTA: Enable transmitter
@@ -168,7 +161,7 @@ __INIT
 	;CCP1CON = 0b00001100 ;
 
 	BANKSEL	TRISC		; BANK 1
-	BCF	TRISC, RC2	; Make sure pin is an output
+	BCF	TRISC, RC2		; Make sure pin is an output
 	MOVLW	B'00000101'
 	MOVWF	PR2
 
@@ -203,9 +196,9 @@ __INIT
 	MOVWF	EEADR
 	CALL	__INITTUNE	; SC low
 
-sid_reset	; 1 SIDCLK loop: SID /RST for WAITCNT SIDCLKs (min 10 per datasheet)
+sid_reset				; 1 SIDCLK loop: SID /RST for WAITCNT SIDCLKs (min 10 per datasheet)
 	BCF	STATUS,	RP0
-	BCF	STATUS,	RP1	; Back in BANK 0, because __INITTUNE returns from BANK 2
+	BCF	STATUS,	RP1		; Back in BANK 0, because __INITTUNE returns from BANK 2
 	BCF	SIDADR,	CTLRST	; Re-enable reset
 
 	DECFSZ	WAITCNT,F
@@ -227,12 +220,10 @@ __MAIN
 ; Execution time: CYCCHR + WAITCNT SIDCLKs max. Write is effective after CYCCHR+WAITCNT SIDCLKs
 ; WAITCNT must NOT exceed CYCCHR: maximum execution time after clearing RCREG MUST BE <= CYCCHR
 __WRITE_REGD	
-	; --- Moved WAITCNT logic here from __GET_ADDR ---
 	; W currently holds the address (from BTABLE)
 	ANDLW	B'11100000'	; W: ddd00000
 	MOVWF	WAITCNT		; WAITCNT: ddd00000
 	SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
-	; -----------------------------------------------
 
 wrd_data	; Wait for data byte
 	GOTO	$+1
@@ -240,18 +231,18 @@ wrd_data	; Wait for data byte
 	
 	BTFSS	PIR1,	RCIF
 	GOTO	wrd_data
-	MOVF	RCREG,	W				; SIDCLK
+	MOVF	RCREG,	W	; SIDCLK
 
-wrd_waitone	; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
+wrd_waitone				; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
 	DECF	WAITCNT,F
 
 	NOP
-	MOVWF	SIDDAT	; Done here to compensate shifted GOTO
+	MOVWF	SIDDAT		; Done here to compensate shifted GOTO
 	
 	DECFSZ	WAITCNT,F
 	GOTO	wrd_waitone
-							; SIDCLK
-	GOTO	__wri	; this GOTO will be 1 cycle late, so we shift inside __WRITE_REGI
+						; SIDCLK
+	GOTO	__wri		; this GOTO will be 1 cycle late, so we shift inside __WRITE_REGI
 
 ; Refer to SID datasheet for timing considerations
 
@@ -259,28 +250,35 @@ wrd_waitone	; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
 ; SID writes are latched on falling SIDCLK edge
 ; Execution time: CYCCHR + 2 SIDCLKs max
 __WRITE_REGI
-wri_data	; Wait for data byte
-	GOTO	$+1		; 1 op / 2 cycles
-	NOP			; 1 op / 1 cycle
+wri_data					; Wait for data byte
+	GOTO	$+1				; 1 op / 2 cycles
+	NOP						; 1 op / 1 cycle
 
 	BTFSS	PIR1,	RCIF	; 1 op / 1 cycle until branch, 2 cycles when branch
-	GOTO	wri_data	; 1 op / 2 cycles
-	MOVF	RCREG,	W	; 1 op / 1 cycle	; SIDCLK fall
+	GOTO	wri_data		; 1 op / 2 cycles
+	MOVF	RCREG,	W		; 1 op / 1 cycle	; SIDCLK fall
 
 	; Copy received byte to data port
-	MOVWF	SIDDAT		; 1 op / 1 cycle
+	MOVWF	SIDDAT			; 1 op / 1 cycle
 	; SID control lines
-__wri	MOVF	CSENCTL,W	; 1 op / 1 cycle
+__wri	
+	MOVLW   ~CSBITM	; 1 op / 1 cycle
 	NOP
 
 	NOP
-	ANDWF	SIDCTL,	F	; 1 op / 1 cycle
-	MOVF	CSDICTL,W	; 1 op / 1 cycle	; SIDCLK fall: write effective
+	ANDWF	SIDCTL,	F		; 1 op / 1 cycle
+	MOVLW	CSBITM			; 1 op / 1 cycle	; SIDCLK fall: write effective
 
-	IORWF	SIDCTL,	F	; 1 op / 1 cycle
-	NOP			; 1 op / 1 cycle
-	GOTO	$+1		; 1 op / 2 cycles
-	GOTO	__GET_ADDR	; 1 op / 2 cycles	; SIDCLK
+	IORWF	SIDCTL,	F		; 1 op / 1 cycle
+	
+	NOP						; 1 op / 1 cycle
+	GOTO	$+1				; 1 op / 2 cycles
+	GOTO	__GET_ADDR		; 1 op / 2 cycles	; SIDCLK
+	
+__ERR_OERR
+	BCF	RCSTA, CREN		; Disable UART Receiver (Clears OERR)
+	BSF	RCSTA, CREN		; Re-enable UART Receiver
+	; Fall through to ga_waddr to try receiving again...
 
 ; Get requested address
 ; In order for cycle-accurate writes to work, execution time after clearing RCREG
@@ -288,42 +286,30 @@ __wri	MOVF	CSENCTL,W	; 1 op / 1 cycle
 ; Execution time: CYCCHR + 1 + 1 (jump table) SIDCLKs max
 __GET_ADDR
 ga_waddr
-	GOTO	$+1
+	;GOTO	$+1
 	NOP
+	
+	BTFSC	RCSTA, OERR		; Check if OERR bit is set (Skip if Clear)
+	GOTO	__ERR_OERR		; If Set, Jump to Error Handler
 	
 	BTFSS	PIR1,	RCIF
 	GOTO	ga_waddr 
-	MOVF	RCREG,	W				; SIDCLK
+	MOVF	RCREG,	W		; SIDCLK
 	
-	MOVWF	TEMPBUF		; Copy address to TEMPBUF, used by jump table
-	
-	; --- REMOVED Logic (Moved to WRITE_REGD/READ_REGD) ---
-	; Saved 3 cycles here.
-	; ANDLW	B'11100000'	; W: ddd00000
-	; MOVWF	WAITCNT		; WAITCNT: ddd00000
-	; SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
-	
-	; --- TIMING CORRECTION ---
-	; Old logic was 3 instructions (ANDLW, MOVWF, SWAPF).
-	; BTABLE preamble grew by 1 cycle (Write moved from index 2 to 3).
-	; We must reduce delay here by 1 cycle total.
-	; 3 (Old) - 1 (BTABLE shift) = 2 cycles needed here.
-	; GOTO	$+1		; 1 op / 2 cycles
+	MOVWF	TEMPBUF			; Copy address to TEMPBUF, used by jump table
 	NOP
 	
-	GOTO	BTABLE					; SIDCLK
+	GOTO	BTABLE			; SIDCLK
 	; JUMP TABLE BASED ON CONTENT OF TEMPBUF, aka ADDRESS
 
 ; Delayed data read
 ; Code flow continues into __READ_REGI to save a goto and maintain clock alignment
 ; Execution time: WAITCNT SIDCLKs. Ensures read happens after exactly WAITCNT SIDclks
 __READ_REGD
-	; --- Moved WAITCNT logic here from __GET_ADDR ---
 	; W contains address from BTABLE
 	ANDLW	B'11100000'	; W: ddd00000
 	MOVWF	WAITCNT		; WAITCNT: ddd00000
 	SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
-	; -----------------------------------------------
 
 rrd_waitone
 	; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
@@ -340,30 +326,30 @@ rrd_waitone
 ; Register is read on current clock cycle
 ; Transfer time: CYCCHR + 1 1/2 SIDCLK.
 __READ_REGI
-	MOVF	CSENCTL,W
-	BSF	SIDCTL,	CTL_RW	; set RW high ahead of clock rise
-	ANDWF	SIDCTL,	F				; SC high
+	MOVLW	~CSBITM
+	BSF		SIDCTL,	CTL_RW	; set RW high ahead of clock rise
+	ANDWF	SIDCTL,	F		; SC high
 
 	; Set data port to input. Apparently this can be done after SIDCTL. Saves a full cycle
 	BSF	STATUS,	RP0
 	COMF	SIDDDR,	F
-	BCF	STATUS, RP0				; SC low, data valid
+	BCF		STATUS, RP0		; SC low, data valid
 
 	NOP
 	MOVF	SIDDAT,	W
-	MOVWF	TXREG		; start RS232 1/2 SID cycle	; SC high
+	MOVWF	TXREG			; start RS232 1/2 SID cycle	; SC high
 
-	MOVF	CSDICTL,W
+	MOVLW 	CSBITM
 	IORWF	SIDCTL,	F
-	BCF	SIDCTL,	CTL_RW				; SIDCLK low
+	BCF		SIDCTL,	CTL_RW	; SIDCLK low
 
 	; Set data port back to output
-	BSF	STATUS,	RP0
+	BSF		STATUS,	RP0
 	CLRF	SIDDDR
-	BCF	STATUS, RP0				; SC high
+	BCF		STATUS, RP0		; SC high
 
 	NOP
-	GOTO	__GET_ADDR				; SIDCLK low
+	GOTO	__GET_ADDR		; SIDCLK low
 
 __IOCTLS
 ; Reset IOCTL
@@ -375,17 +361,7 @@ IOCTRS
 	MOVLW	.20	; per datasheet, min 10 SIDCLKs for reset
 	MOVWF	WAITCNT
 	GOTO	$+1
-	GOTO	sid_reset				; SIDCLK
-
-; Select SID IOCTL
-; Execution time: 1 SIDCLKs
-IOCTS
-	MOVLW	~CSBITM
-	MOVWF	CSENCTL			; Write enable bits
-	MOVLW	CSBITM
-
-	MOVWF	CSDICTL			; Write disable bits
-	GOTO	__GET_ADDR				; SIDCLK
+	GOTO	sid_reset		; SIDCLK
 
 ; Firmware version IOCTL
 ; Returns current firmware version
@@ -394,7 +370,7 @@ IOCTFV
 	MOVLW	FWVERS
 	MOVWF	TXREG
 	GOTO	$+1
-	GOTO	__GET_ADDR				; SIDCLK
+	GOTO	__GET_ADDR		; SIDCLK
 
 ; Hardware version IOCTL
 ; Returns current hardware version
@@ -403,7 +379,7 @@ IOCTHV
 	MOVLW	HWVERS
 	MOVWF	TXREG
 	GOTO	$+1
-	GOTO	__GET_ADDR				; SIDCLK
+	GOTO	__GET_ADDR		; SIDCLK
 
 ; Long Delay IOCTL
 ; Delay value MUST BE >0
@@ -416,22 +392,22 @@ IOCTLD
 	NOP
 
 	BTFSS	PIR1,	RCIF	; 1 op / 1 cycle until branch, 2 cycles when branch
-	GOTO	IOCTLD		; 1 op / 2 cycles
-	MOVF	RCREG,	W	; 1 op / 1 cycle	; SIDCLK
+	GOTO	IOCTLD			; 1 op / 2 cycles
+	MOVF	RCREG,	W		; 1 op / 1 cycle	; SIDCLK
 
 	; 2*CYCCHR before we arrive here: address decoding + own read
 	MOVWF	WAITCNT+1
 	GOTO	$+1
 
 icld_waitlong
-	MOVLW	0xFA		; wait x times 250 SIDCLKs
+	MOVLW	0xFA			; wait x times 250 SIDCLKs
 	MOVWF	WAITCNT
 	NOP						; SIDCLK
 
 icld_waitcycle
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1					; SIDCLK
+	GOTO	$+1				; SIDCLK
 
 	GOTO	$+1
 	NOP
@@ -446,8 +422,8 @@ icld_waitcycle
 	NOP
 	; When here, we are at SIDCLK/2
 
-	CLRF	TXREG		; 1 op	dummy write / 1 CYCCHR before fully transmitted
-	GOTO	__GET_ADDR				; SIDCLK
+	CLRF	TXREG			; 1 op	dummy write / 1 CYCCHR before fully transmitted
+	GOTO	__GET_ADDR		; SIDCLK
 
 ; A simple start tune routine that reads data from program memory
 ; Currently only handles writes and delay: addresses are written to the SIDs,
@@ -460,11 +436,11 @@ icld_waitcycle
 __INITTUNE
 	BANKSEL EECON1		; 2 cycles Bank 3
 	BSF	EECON1, EEPGD	; Point to PROGRAM memory
-	BSF	EECON1, RD	; Toggle Read
-	NOP			; Contrary to what the Datasheet says, the next instruction
-				; after BSF EECON1,RD does *NOT* execute normally
-	NOP	;SC		; Instruction here is ignored as program
-				; memory is read in second cycle after BSF EECON1,RD
+	BSF	EECON1, RD		; Toggle Read
+	NOP					; Contrary to what the Datasheet says, the next instruction
+						; after BSF EECON1,RD does *NOT* execute normally
+	NOP	;SC				; Instruction here is ignored as program
+						; memory is read in second cycle after BSF EECON1,RD
 
 	; Fetch data read
 	BCF	STATUS, RP0	; Bank 2
@@ -483,8 +459,8 @@ __INITTUNE
 	SUBLW	0x3F
 
 	BTFSC	STATUS, Z
-	RETURN			; SC if Z (exit) -- XXX returns in Bank 2
-	BCF	STATUS,	RP1	; SC if !Z - BANK 0 necessary for the rest of the code
+	RETURN				; SC if Z (exit) -- XXX returns in Bank 2
+	BCF	STATUS,	RP1		; SC if !Z - BANK 0 necessary for the rest of the code
 
 	; Check if delay is requested
 	BTFSC	HPMBYTE,5
@@ -502,9 +478,9 @@ __INITTUNE
 	; SID control lines
 	GOTO	$+1
 
-	MOVF	CSENCTL,W
+	MOVLW	~CSBITM
 	ANDWF	SIDCTL,	F
-	MOVF	CSDICTL,W	; SIDCLK fall
+	MOVLW	CSBITM		; SIDCLK fall
 
 	IORWF	SIDCTL,	F
 	GOTO	$+1
@@ -519,7 +495,7 @@ st_delay
 	ANDLW	B'00011111'
 	MOVWF	HPMBYTE		; SC low
 
-st_dloop2	; 10 SIDCLKs (0.01 ms) loop
+st_dloop2				; 10 SIDCLKs (0.01 ms) loop
 	MOVF	LPMBYTE,W
 	BTFSC	STATUS, Z
 	DECF	HPMBYTE,F	; if low = 0, dec high
@@ -529,42 +505,42 @@ st_dloop2	; 10 SIDCLKs (0.01 ms) loop
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	GOTO	$+1
-	GOTO	$+1		; SC
+	GOTO	$+1			; SC
 
 	GOTO	$+1
 	NOP
 
 	BTFSS	STATUS, Z
 	GOTO	st_dloop2	; SC if !Z
-	NOP			; SC if Z
+	NOP					; SC if Z
 
 	GOTO	$+1
 	GOTO	$+1
@@ -572,66 +548,62 @@ st_dloop2	; 10 SIDCLKs (0.01 ms) loop
 
 ; Delay (approx) macro, Time in ms
 Mdelay		MACRO	Time
-	if (Time > .75)
-	error "Time cannot be more than 75ms"
+	if (Time > .79)
+	error "Time cannot be more than 79ms"
 	endif
-	dw	(Time*.100)|0x2000
+	dw	(Time * .100) | 0x2000
 	ENDM
 
-; Clear all SID registers
+; Clear all 25 writable SID registers
 Mreset		MACRO
-	local Reg=0
-	while (Reg <= 0x18)
-	dw	Reg << .8
+	local Reg = 0
+	while (Reg < .25)
+	dw	Reg << 8
 Reg++
 	endw
 	ENDM
 
-Mreg		MACRO	Reg, Val
-	dw	(Reg << .8) | Val
+Mreg		MACRO Reg, Val
+	dw	(Reg << 8) | Val
 	ENDM
 
 ; Voice Macros (Voice = 1, 2, or 3)
-Mvoice_Freq MACRO Voice, Val16
-	dw	(((Voice-1)*.7) << .8) | (Val16 & 0xFF)
-	dw	((((Voice-1)*.7)+1) << .8) | (Val16 >> .8)
+Mvoice_Freq	MACRO Voice, Val16
+	dw	(((Voice - 1) * 7) << 8) | (Val16 & 0xFF)
+	dw	((((Voice - 1) * 7) + 1) << 8) | (Val16 >> 8)
 	ENDM
 
 Mvoice_PW	MACRO Voice, Val12
-	dw	((((Voice-1)*.7)+2) << .8) | (Val12 & 0xFF)
-	dw	((((Voice-1)*.7)+3) << .8) | ((Val12 >> .8) & 0x0F)
+	dw	((((Voice - 1) * 7) + 2) << 8) | (Val12 & 0xFF)
+	dw	((((Voice - 1) * 7) + 3) << 8) | ((Val12 >> 8) & 0x0F)
 	ENDM
 
-Mvoice_Ctrl MACRO Voice, Val
-	dw	((((Voice-1)*.7)+4) << .8) | Val
+Mvoice_Ctrl MACRO Voice, Val8
+	dw	((((Voice - 1) * 7) + 4) << 8) | Val8
 	ENDM
 
-Mvoice_AD	MACRO Voice, Val
-	dw	((((Voice-1)*.7)+5) << .8) | Val
+Mvoice_AD	MACRO Voice, Val8
+	dw	((((Voice - 1) * 7) + 5) << 8) | Val8
 	ENDM
 
-Mvoice_SR	MACRO Voice, Val
-	dw	((((Voice-1)*.7)+6) << .8) | Val
+Mvoice_SR	MACRO Voice, Val8
+	dw	((((Voice - 1) * 7) + 6) << 8) | Val8
 	ENDM
 
 ; Filter Macros
-Mcutoff	MACRO	Val16
+Mcutoff		MACRO Val16
 	dw	0x1500 | (Val16 & 0x07)
-	dw	0x1600 | (Val16 >> .3)
-	ENDM
-
-Mres		MACRO	Val
-	Mreg	0x17, Val
+	dw	0x1600 | (Val16 >> 3)
 	ENDM
 
 ; Master Volume
-Mvol		MACRO	Val
-	Mreg	0x18, Val
+Mvol		MACRO Val8
+	Mreg	0x18, Val8
 	ENDM
 
 __TUNEDATA	ORG	0x0200
-	Mdelay				.50			; Delay: 50 ms (Wait for power stabilization)
-	Mdelay				.50			; Delay: 50 ms
+	Mdelay				.50			; 50ms (Wait for power stabilization)
+	Mdelay				.50			; 50ms
 
 	Mreset							; Clear SID registers
 
@@ -639,959 +611,966 @@ __TUNEDATA	ORG	0x0200
 	Mvoice_Ctrl			2, 0x40		; Pulse, Stop Note (Gate Closed)
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
 	Mvol 				0x1F		; Master Volume 15 | Filter: Low Pass
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			1, 0x045A	; Note: C-2
+	Mvoice_Freq			1, 0x045A	; C-2
 	Mvoice_PW			1, 0x320	;
 	Mvoice_Ctrl			1, 0x41		; Pulse, Start Note (Gate Open)
 	Mvoice_AD			1, 0x09		; Attack 0, Decay 9
 	Mvoice_SR			1, 0x9A		; Sustain 9, Release 10
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mvoice_PW			2, 0x420	;
 	Mvoice_Ctrl			2, 0x41		; Pulse, Start Note (Gate Open)
 	Mvoice_AD			2, 0x09		; Attack 0, Decay 9
 	Mvoice_SR			2, 0x99		; Sustain 9, Release 9
-	Mvoice_Freq			3, 0x0751	; Note: A-2
+	Mvoice_Freq			3, 0x0751	; A-2
 	Mvoice_Ctrl			3, 0x11		; Triangle, Start Note (Gate Open)
 	Mvoice_SR			3, 0xE0		; Sustain 14, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0x40	;
 	Mvoice_Ctrl			3, 0x00		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
 	Mvoice_Ctrl			1, 0x40		; Pulse, Stop Note (Gate Closed)
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0x60	;
 	Mvoice_Ctrl			2, 0x40		; Pulse, Stop Note (Gate Closed)
 	Mvoice_Freq			3, 0x0127
 	Mvoice_SR			3, 0x00		; Sustain 0, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mreg				0x09, 0xA0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0xC0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0xE0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mvoice_PW			2, 0x500	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0x40	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0x60	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mreg				0x09, 0x80	;
-	Mvoice_Freq			3, 0x0EA2	; Note: A-3
+	Mvoice_Freq			3, 0x0EA2	; A-3
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
 	Mvoice_SR			3, 0xE0		; Sustain 14, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mreg				0x09, 0xA0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0xC0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0xE0	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x500	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mvoice_PW			2, 0x600	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x4E0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mvoice_PW			2, 0x5E0	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0xC0	;
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0xA0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mreg				0x09, 0x60	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0x40	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0x20	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mreg				0x09, 0x00	;
 	Mvoice_Ctrl			3, 0x11		; Triangle, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x3E0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mvoice_PW			2, 0x4E0	;
-	Mvoice_Freq			3, 0x5CED	; Note: F-6
+	Mvoice_Freq			3, 0x5CED	; F-6
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0xC0	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0xA0	;
-	Mvoice_Freq			3, 0x0127	; Note: C#0
+	Mvoice_Freq			3, 0x0127	; C#0
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0x40	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x4E24	; Note: D-6
+	Mvoice_Freq			2, 0x4E24	; D-6
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x5CED	; Note: F-6
+	Mvoice_Freq			2, 0x5CED	; F-6
 	Mreg				0x09, 0x00	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E76	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x3E05	; Note: A#5
+	Mvoice_Freq			2, 0x3E05	; A#5
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mvoice_Ctrl			2, 0x41		; Pulse, Start Note (Gate Open)
-	Mvoice_Freq			3, 0x0EA2	; Note: A-3
+	Mvoice_Freq			3, 0x0EA2	; A-3
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x40	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x80	;
 	Mvoice_Ctrl			2, 0x40		; Pulse, Stop Note (Gate Closed)
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0xA0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0xC0	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xE0	;
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mvoice_PW			2, 0x500	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x40	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x80	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x320	;
 	Mvoice_Ctrl			1, 0x41		; Pulse, Start Note (Gate Open)
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0xA0	;
-	Mvoice_Freq			3, 0x0751	; Note: A-2
+	Mvoice_Freq			3, 0x0751	; A-2
 	Mvoice_Ctrl			3, 0x11		; Triangle, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0xC0	;
-	Mvoice_Freq			3, 0x2E76	; Note: F-5
+	Mvoice_Freq			3, 0x2E76	; F-5
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xE0	;
 	Mvoice_Ctrl			3, 0x00		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
 	Mvoice_Ctrl			1, 0x40		; Pulse, Stop Note (Gate Closed)
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mvoice_PW			2, 0x600	;
 	Mvoice_Freq			3, 0x0127
 	Mvoice_SR			3, 0x00		; Sustain 0, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mvoice_PW			2, 0x5E0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0xC0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xA0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x40	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x00	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mvoice_PW			2, 0x4E0	;
-	Mvoice_Freq			3, 0x0751	; Note: A-2
+	Mvoice_Freq			3, 0x0751	; A-2
 	Mvoice_Ctrl			3, 0x11		; Triangle, Start Note (Gate Open)
 	Mvoice_SR			3, 0xE0		; Sustain 14, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0xC0	;
-	Mvoice_Freq			3, 0x2E76	; Note: F-5
+	Mvoice_Freq			3, 0x2E76	; F-5
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xA0	;
 	Mvoice_Ctrl			3, 0x00		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x500	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x80	;
 	Mvoice_Freq			3, 0x0127
 	Mvoice_SR			3, 0x00		; Sustain 0, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x4E0	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x40	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x20	;
-	Mvoice_Freq			3, 0x0EA2	; Note: A-3
+	Mvoice_Freq			3, 0x0EA2	; A-3
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
 	Mvoice_SR			3, 0xE0		; Sustain 14, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x00	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2BDB	; E-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x20	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x40	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x60	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x3E0	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x80	;
 	Mvoice_Ctrl			3, 0x11		; Triangle, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0xA0	;
-	Mvoice_Freq			3, 0x5CED	; Note: F-6
+	Mvoice_Freq			3, 0x5CED	; F-6
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xC0	;
 	Mvoice_Ctrl			3, 0x00		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0xE0	;
 	Mvoice_Freq			3, 0x0127
 	Mvoice_SR			3, 0x00		; Sustain 0, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mvoice_PW			2, 0x500	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x40	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0xA0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xC0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0xE0	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mvoice_PW			2, 0x600	;
-	Mvoice_Freq			3, 0x0EA2	; Note: A-3
+	Mvoice_Freq			3, 0x0EA2	; A-3
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
 	Mvoice_SR			3, 0xE0		; Sustain 14, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mvoice_PW			2, 0x5E0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xC0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0xA0	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mreg				0x09, 0x60	;
 	Mvoice_Ctrl			3, 0x80		; Noise, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0x40	;
 	Mvoice_Ctrl			3, 0x81		; Noise, Start Note (Gate Open)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x57B6	; Note: E-6
+	Mvoice_Freq			2, 0x57B6	; E-6
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x2BDB	; Note: E-5
+	Mvoice_Freq			2, 0x2BDB	; E-5
 	Mreg				0x09, 0x00	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
 	Mvoice_Freq			2, 0x3427	; Note: G-5
 	Mvoice_PW			2, 0x4E0	;
 	Mvoice_Ctrl			3, 0x08		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x459D	; Note: C-6
+	Mvoice_Freq			2, 0x459D	; C-6
 	Mreg				0x09, 0xC0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_Ctrl			3, 0x00		; Silent, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			1, 0x02E7	; Note: F-1
+	Mvoice_Freq			1, 0x02E7	; F-1
 	Mvoice_PW			1, 0x320	;
 	Mvoice_Ctrl			1, 0x41		; Pulse, Start Note (Gate Open)
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mvoice_PW			2, 0x790	;
 	Mvoice_Ctrl			2, 0x41		; Pulse, Start Note (Gate Open)
 	Mvoice_AD			2, 0x06		; Attack 0, Decay 6
 	Mvoice_SR			2, 0x6A		; Sustain 6, Release 10
 	Mvoice_Freq			3, 0x0127
 	Mvoice_SR			3, 0x00		; Sustain 0, Release 0
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x22CF	; Note: C-5
+	Mvoice_Freq			2, 0x22CF	; C-5
 	Mreg				0x09, 0x20	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x1D45	; Note: A-4
+	Mvoice_Freq			2, 0x1D45	; A-4
 	Mvoice_PW			2, 0x6B0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
 	Mvoice_Ctrl			1, 0x40		; Pulse, Stop Note (Gate Closed)
-	Mvoice_Freq			2, 0x173B	; Note: F-4
+	Mvoice_Freq			2, 0x173B	; F-4
 	Mreg				0x09, 0x40	;
 	Mvoice_Ctrl			2, 0x50		; Triangle + Pulse, Stop Note (Gate Closed)
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
+	Mvoice_Freq			2, 0x2E76	; F-5
 	Mvoice_PW			2, 0x5D0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x22CF	; Note: C-5
+	Mvoice_Freq			2, 0x22CF	; C-5
 	Mreg				0x09, 0x60	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x1D65	; Note: A-4
+	Mvoice_Freq			2, 0x1D65	; A-4
 	Mvoice_PW			2, 0x4F0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x177B	; Note: F-4
+	Mvoice_Freq			2, 0x177B	; F-4
 	Mreg				0x09, 0x80	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x2E96	; Note: F-5
+	Mvoice_Freq			2, 0x2E96	; F-5
 	Mreg				0x09, 0x10	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x22CF	; Note: C-5
+	Mvoice_Freq			2, 0x22CF	; C-5
 	Mvoice_PW			2, 0x3A0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x1D25	; Note: A-4
+	Mvoice_Freq			2, 0x1D25	; A-4
 	Mreg				0x09, 0x30	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x16FB	; Note: F-4
+	Mvoice_Freq			2, 0x16FB	; F-4
 	Mvoice_PW			2, 0x2C0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2E16	; Note: F-5
+	Mvoice_Freq			2, 0x2E16	; F-5
 	Mreg				0x09, 0x50	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x226F	; Note: C-5
+	Mvoice_Freq			2, 0x226F	; C-5
 	Mvoice_PW			2, 0x1E0	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x1D05	; Note: A-4
+	Mvoice_Freq			2, 0x1D05	; A-4
 	Mreg				0x09, 0x70	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x500	;
-	Mvoice_Freq			2, 0x171B	; Note: F-4
+	Mvoice_Freq			2, 0x171B	; F-4
 	Mreg				0x09, 0x00	;
-	Mdelay				.20			; Delay: 20 ms
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x4E0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E76	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x22EF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22EF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x1D85	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D85	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x175B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x175B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E76	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x22AF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22AF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x1D05	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D05	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x16DB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16DB	; F-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x3E0	;
-	Mvoice_Freq			2, 0x2E16	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E16	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x228F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x228F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x1D25	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D25	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x173B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x173B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2E96	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E96	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x230F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x230F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x1D65	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D65	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x173B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x173B	; F-4
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			2, 0x2E56	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E56	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x228F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x228F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x1CE5	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1CE5	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x16DB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16DB	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x2E36	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E36	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x22AF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22AF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x1D45	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D45	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x175B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x175B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x2EB6	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2EB6	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x22EF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22EF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x1D45	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D45	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x171B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x171B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x2E36	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E36	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x226F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x226F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x1CE5	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1CE5	; A-4
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			2, 0x16FB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16FB	; F-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x320	;
 	Mvoice_Ctrl			1, 0x41		; Pulse, Start Note (Gate Open)
-	Mvoice_Freq			2, 0x2E56	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E56	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x22CF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22CF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x1D65	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D65	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
 	Mvoice_Ctrl			1, 0x40		; Pulse, Stop Note (Gate Closed)
-	Mvoice_Freq			2, 0x177B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x177B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2E96	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E96	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x22CF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22CF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x1D25	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D25	; A-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x16FB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16FB	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x2E16	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E16	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x226F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x226F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x1D05	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D05	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x171B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x171B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E76	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x22EF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22EF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x1D85	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D85	; A-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x500	;
-	Mvoice_Freq			2, 0x175B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x175B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x4E0	;
-	Mvoice_Freq			2, 0x2E76	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E76	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x22AF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22AF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x1D05	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D05	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x16DB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16DB	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2E16	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E16	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x228F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x228F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x1D25	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D25	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x173B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x173B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x3E0	;
-	Mvoice_Freq			2, 0x2E96	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E96	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x230F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x230F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x1D65	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D65	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x173B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x173B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x2E56	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E56	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x228F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x228F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x1CE5	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1CE5	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x00	;
-	Mvoice_Freq			2, 0x16DB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16DB	; F-4
+	Mdelay				.20			; 20ms
 
-	Mvoice_Freq			2, 0x2E36	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E36	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x22AF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22AF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x1D45	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D45	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x175B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x175B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x2EB6	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2EB6	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x22EF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22EF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x1D45	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1D45	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xE0	;
-	Mvoice_Freq			2, 0x171B	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x171B	; F-4
+	Mdelay				.20			; 20ms
 
 	Mvoice_PW			1, 0x400	;
-	Mvoice_Freq			2, 0x2E36	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E36	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x20	;
-	Mvoice_Freq			2, 0x226F	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x226F	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x40	;
-	Mvoice_Freq			2, 0x1CE5	; Note: A-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x1CE5	; A-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x60	;
-	Mvoice_Freq			2, 0x16FB	; Note: F-4
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x16FB	; F-4
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0x80	;
-	Mvoice_Freq			2, 0x2E56	; Note: F-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x2E56	; F-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xA0	;
-	Mvoice_Freq			2, 0x22CF	; Note: C-5
-	Mdelay				.20			; Delay: 20 ms
+	Mvoice_Freq			2, 0x22CF	; C-5
+	Mdelay				.20			; 20ms
 
 	Mreg				0x02, 0xC0	;
-	Mvoice_Freq			2, 0x1D65	; Note: A-4
-	Mdelay .50						; Delay: 50ms
-	Mdelay .50						; Delay: 50 ms
-	
-	Mreset							; Clear SID registers
+	Mvoice_Freq			2, 0x1D65	; A-4
 
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	Mdelay				.50			; 50ms
+	
 	dw	0x3FFF						; END
 
 ; Branch table. IOCTL are interleaved with valid SID addresses
@@ -1606,8 +1585,7 @@ BTABLE	ORG	JMPTBA-5
 	IORLW	ADDRBITM	; Force RA5 High (1 cycle)
 	MOVWF	SIDADR		; Output address (Write happens at correct time)
 	MOVF	TEMPBUF,W
-	MOVWF	PCL		; PCLATH must be set before the jump
-	; ---------------------------
+	MOVWF	PCL			; PCLATH must be set before the jump
 	FILL	(GOTO	__WRITE_REGI), 0x19	; 25 valid write addresses up to 0x18, data
 	FILL	(GOTO	__READ_REGI), 0x4	; 4 valid read addresses up to 0x1C, no data
 	NOP				; 0x1D UNUSED
@@ -1631,14 +1609,14 @@ BTABLE	ORG	JMPTBA-5
 	NOP				; 0x7F UNUSED
 	FILL	(GOTO	__WRITE_REGD), 0x19
 	FILL	(GOTO	__READ_REGD), 0x4
-	GOTO	__GET_ADDR		; 0x9D IOCTD1 CYCCHR SIDCLK delay, no data
-	GOTO	IOCTLD			; 0x9E IOCTLD long delay, amount in data, returns 1 byte
+	GOTO	__GET_ADDR					; 0x9D IOCTD1 CYCCHR SIDCLK delay, no data
+	GOTO	IOCTLD						; 0x9E IOCTLD long delay, amount in data, returns 1 byte
 	NOP				; 0x9F UNUSED
 	FILL	(GOTO	__WRITE_REGD), 0x19
 	FILL	(GOTO	__READ_REGD), 0x4
-	GOTO	IOCTS			; 0xBD IOCTS select Chip, no data
-	GOTO	IOCTS			;
-	GOTO	IOCTS			;
+	GOTO	__MAIN						; 0xBD We removed CS logic. We only have one SID
+	GOTO	__MAIN						; 0xBE
+	GOTO	__MAIN						; 0xBF
 	FILL	(GOTO	__WRITE_REGD), 0x19
 	FILL	(GOTO	__READ_REGD), 0x4
 	NOP				; 0xDD UNUSED
@@ -1646,9 +1624,9 @@ BTABLE	ORG	JMPTBA-5
 	NOP				; 0xDF UNUSED
 	FILL	(GOTO	__WRITE_REGD), 0x19
 	FILL	(GOTO	__READ_REGD), 0x4
-	GOTO	IOCTFV			; 0xFD Firmware version, no data, returns 1 byte
-	GOTO	IOCTHV			; 0xFE Hardware version, no data, returns 1 byte
-__END	GOTO	IOCTRS			; 0xFF Reset, no data
+	GOTO	IOCTFV						; 0xFD Firmware version, no data, returns 1 byte
+	GOTO	IOCTHV						; 0xFE Hardware version, no data, returns 1 byte
+__END	GOTO	IOCTRS					; 0xFF Reset, no data
 
 ; !!! 0x07FF Program must stay in Page 0 !!!
 	END
