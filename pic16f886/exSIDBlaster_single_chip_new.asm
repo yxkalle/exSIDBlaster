@@ -49,9 +49,7 @@
 	__CONFIG _CONFIG1, _FOSC_EC & _WDTE_OFF & _PWRTE_ON & _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_ON & _IESO_OFF & _FCMEN_OFF & _LVP_OFF
 	__CONFIG _CONFIG2, _BOR4V_BOR40V & _WRT_OFF
 
-#define SETHIBDRT	; if defined: 2Mbps, 1-cycle resolution, else 750kbps, 2-cycle resolution
-
-#define	SIDCTL		PORTC		; SID bus control port
+#define	SIDCTL		PORTC		; SID bus control port (except reset)
 #define	SIDADR		PORTA		; SID bus address port
 #define	SIDDAT		PORTB		; SID bus data port
 #define	SIDDDR		TRISB		; SID bus data direction
@@ -60,14 +58,17 @@
 
 #define	CTL_CS		RC0
 #define	CTL_RW		RC1
-#define	CTLRST		RC4
+#define	CTLRST		RA5
 #define	CTLCLK		RC2		; SID CLK on SIDCTL
 #define	FTDIRX		RC6
 #define	FTDITX		RC7
 
+; -- ADDED DEFINE FOR MASKING --
+#define ADDRBITM	(1 << CTLRST)
+
 ; By default RW is held low. The read routine must bring it back low after exec.
 ; Chip select bitmask.
-#define	CSBITM		(B'1' << CTL_CS)
+#define	CSBITM		(1 << CTL_CS)
 
 #define	JMPTBA		0x0700		; Jump table base address. 0x07xx stays in Page 0 and ensures no screw up with GOTO/CALL
 
@@ -190,7 +191,7 @@ __INIT
 	; This NOP can be used as a global offset on timings: Clock edges happen 1 INSN earlier
 ;	NOP
 
-	BSF	SIDCTL,	CTLRST	; Clear reset condition before playing the startup tune
+	BSF	SIDADR, CTLRST	; Clear reset condition before playing the startup tune
 	; start address must be set before the jump
 	BCF	STATUS,	RP0
 	BSF	STATUS, RP1	; BANK 2, SC low
@@ -205,11 +206,11 @@ __INIT
 sid_reset	; 1 SIDCLK loop: SID /RST for WAITCNT SIDCLKs (min 10 per datasheet)
 	BCF	STATUS,	RP0
 	BCF	STATUS,	RP1	; Back in BANK 0, because __INITTUNE returns from BANK 2
-	BCF	SIDCTL,	CTLRST	; Re-enable reset
+	BCF	SIDADR,	CTLRST	; Re-enable reset
 
 	DECFSZ	WAITCNT,F
 	GOTO	sid_reset
-	BSF	SIDCTL,	CTLRST	; SIDCLK. Clear reset condition.
+	BSF	SIDADR,	CTLRST	; SIDCLK. Clear reset condition.
 
 	; WARN: We are in BANK 0 from now on: the rest of the code assumes this
 
@@ -225,21 +226,28 @@ __MAIN
 ; When called, WAITCNT contains 0000ddd0, ddd == delay in SIDCLKs, non-null
 ; Execution time: CYCCHR + WAITCNT SIDCLKs max. Write is effective after CYCCHR+WAITCNT SIDCLKs
 ; WAITCNT must NOT exceed CYCCHR: maximum execution time after clearing RCREG MUST BE <= CYCCHR
-__WRITE_REGD
+__WRITE_REGD	
+	; --- Moved WAITCNT logic here from __GET_ADDR ---
+	; W currently holds the address (from BTABLE)
+	ANDLW	B'11100000'	; W: ddd00000
+	MOVWF	WAITCNT		; WAITCNT: ddd00000
+	SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
+	; -----------------------------------------------
+
 wrd_data	; Wait for data byte
 	GOTO	$+1
 	NOP
-
+	
 	BTFSS	PIR1,	RCIF
 	GOTO	wrd_data
 	MOVF	RCREG,	W				; SIDCLK
 
-wrd_waitone
-; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
+wrd_waitone	; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
 	DECF	WAITCNT,F
+
 	NOP
 	MOVWF	SIDDAT	; Done here to compensate shifted GOTO
-
+	
 	DECFSZ	WAITCNT,F
 	GOTO	wrd_waitone
 							; SIDCLK
@@ -282,16 +290,27 @@ __GET_ADDR
 ga_waddr
 	GOTO	$+1
 	NOP
-
+	
 	BTFSS	PIR1,	RCIF
-	GOTO	ga_waddr
+	GOTO	ga_waddr 
 	MOVF	RCREG,	W				; SIDCLK
-
+	
 	MOVWF	TEMPBUF		; Copy address to TEMPBUF, used by jump table
-	ANDLW	B'11100000'	; W: ddd00000
-	MOVWF	WAITCNT		; WAITCNT: ddd00000
-
-	SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
+	
+	; --- REMOVED Logic (Moved to WRITE_REGD/READ_REGD) ---
+	; Saved 3 cycles here.
+	; ANDLW	B'11100000'	; W: ddd00000
+	; MOVWF	WAITCNT		; WAITCNT: ddd00000
+	; SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
+	
+	; --- TIMING CORRECTION ---
+	; Old logic was 3 instructions (ANDLW, MOVWF, SWAPF).
+	; BTABLE preamble grew by 1 cycle (Write moved from index 2 to 3).
+	; We must reduce delay here by 1 cycle total.
+	; 3 (Old) - 1 (BTABLE shift) = 2 cycles needed here.
+	; GOTO	$+1		; 1 op / 2 cycles
+	NOP
+	
 	GOTO	BTABLE					; SIDCLK
 	; JUMP TABLE BASED ON CONTENT OF TEMPBUF, aka ADDRESS
 
@@ -299,6 +318,13 @@ ga_waddr
 ; Code flow continues into __READ_REGI to save a goto and maintain clock alignment
 ; Execution time: WAITCNT SIDCLKs. Ensures read happens after exactly WAITCNT SIDclks
 __READ_REGD
+	; --- Moved WAITCNT logic here from __GET_ADDR ---
+	; W contains address from BTABLE
+	ANDLW	B'11100000'	; W: ddd00000
+	MOVWF	WAITCNT		; WAITCNT: ddd00000
+	SWAPF	WAITCNT, F	; WAITCNT: 0000ddd0 => ddd is delay cycles
+	; -----------------------------------------------
+
 rrd_waitone
 	; WAITCNT is twice the desired value, decrement 2-by-2 on each loop
 	DECF	WAITCNT,F
@@ -466,6 +492,7 @@ __INITTUNE
 
 	; Copy received address to address port
 	MOVF	HPMBYTE,W	; sc h
+	IORLW	ADDRBITM	; Force RA5 High (Masking for startup tune)
 	MOVWF	SIDADR
 
 	; Copy received data to data port
@@ -474,7 +501,6 @@ __INITTUNE
 
 	; SID control lines
 	GOTO	$+1
-	NOP			; sc h
 
 	MOVF	CSENCTL,W
 	ANDWF	SIDCTL,	F
@@ -1568,10 +1594,20 @@ __TUNEDATA	ORG	0x0200
 
 	dw	0x3FFF						; END
 
-BTABLE	ORG	JMPTBA-3
+; Branch table. IOCTL are interleaved with valid SID addresses
+; Execution time: 6 cycles / 1 SIDCLK
+; XXX predelay 5 cycles: I suspect the MOVWF PCL requires 2 cycles to take effect
+
+; --- CHANGED for MASKING ---
+; We have 5 instructions now instead of 3.
+; We moved ORG back by 2 bytes (3->5)
+BTABLE	ORG	JMPTBA-5
 	MOVF	TEMPBUF,W
-	MOVWF	SIDADR		; Output address to SID A-lines
+	IORLW	ADDRBITM	; Force RA5 High (1 cycle)
+	MOVWF	SIDADR		; Output address (Write happens at correct time)
+	MOVF	TEMPBUF,W
 	MOVWF	PCL		; PCLATH must be set before the jump
+	; ---------------------------
 	FILL	(GOTO	__WRITE_REGI), 0x19	; 25 valid write addresses up to 0x18, data
 	FILL	(GOTO	__READ_REGI), 0x4	; 4 valid read addresses up to 0x1C, no data
 	NOP				; 0x1D UNUSED
